@@ -9,8 +9,9 @@ Extreme Learning Machine Classifiers and Regressors (ELMClassifier,
 ELMRegressor, SimpleELMRegressor, SimpleELMClassifier).
 
 An Extreme Learning Machine (ELM) is a single layer feedforward
-network with a random hidden layer components and least-squares fitting
-of the hidden->output weights by default. [1][2]
+network with a random hidden layer components and ordinary linear
+least squares fitting of the hidden->output weights by default.
+[1][2]
 
 References
 ----------
@@ -23,12 +24,11 @@ References
 from abc import ABCMeta, abstractmethod
 
 import numpy as np
-from scipy.linalg import pinv2
 
 from sklearn.utils import as_float_array
-from sklearn.utils.extmath import safe_sparse_dot
 from sklearn.base import BaseEstimator, ClassifierMixin, RegressorMixin
 from sklearn.preprocessing import LabelBinarizer
+from sklearn.linear_model import LinearRegression
 
 from random_hidden_layer import SimpleRandomHiddenLayer
 
@@ -96,18 +96,19 @@ class ELMRegressor(BaseELM, RegressorMixin):
     ELMRegressor is a regressor based on the Extreme Learning Machine.
 
     An Extreme Learning Machine (ELM) is a single layer feedforward
-    network with a random hidden layer components and least-squares fitting
-    of the hidden->output weights by default. [1][2]
+    network with a random hidden layer components and ordinary linear
+    least squares fitting of the hidden->output weights by default.
+    [1][2]
 
     Parameters
     ----------
     `hidden_layer` : random_hidden_layer instance, optional
         (default=SimpleRandomHiddenLayer(random_state=0))
 
-    `regressor`    : linear_model instance, optional (default=None)
+    `regressor`    : regressor instance, optional (default=None)
         If provided, this object is used to perform the regression from hidden
         unit activations to the outputs and subsequent predictions.  If not
-        present, a simple least squares fit is performed internally.
+        present, an ordinary linear least squares fit is performed
 
     Attributes
     ----------
@@ -139,14 +140,19 @@ class ELMRegressor(BaseELM, RegressorMixin):
 
         super(ELMRegressor, self).__init__(hidden_layer, regressor)
 
-        self.coefs_ = None
         self.fitted_ = False
         self.hidden_activations_ = None
+        self._lin_reg = LinearRegression(copy_X=False,
+                                         normalize=False,
+                                         fit_intercept=False)
 
     def _fit_regression(self, y):
-        """fit regression using internal least squares/supplied regressor"""
+        """
+        fit regression using internal linear regression
+        or supplied regressor
+        """
         if (self.regressor is None):
-            self.coefs_ = safe_sparse_dot(pinv2(self.hidden_activations_), y)
+            self._lin_reg.fit(self.hidden_activations_, y)
         else:
             self.regressor.fit(self.hidden_activations_, y)
 
@@ -183,7 +189,7 @@ class ELMRegressor(BaseELM, RegressorMixin):
     def _get_predictions(self, X):
         """get predictions using internal least squares/supplied regressor"""
         if (self.regressor is None):
-            preds = safe_sparse_dot(self.hidden_activations_, self.coefs_)
+            preds = self._lin_reg.predict(self.hidden_activations_)
         else:
             preds = self.regressor.predict(self.hidden_activations_)
 
@@ -219,18 +225,19 @@ class ELMClassifier(BaseELM, ClassifierMixin):
     ELMClassifier is a classifier based on the Extreme Learning Machine.
 
     An Extreme Learning Machine (ELM) is a single layer feedforward
-    network with a random hidden layer components and least-squares fitting
-    of the hidden->output weights by default. [1][2]
+    network with a random hidden layer components and ordinary linear
+    least squares fitting of the hidden->output weights by default.
+    [1][2]
 
     Parameters
     ----------
     `hidden_layer` : random_hidden_layer instance, optional
         (default=SimpleRandomHiddenLayer(random_state=0))
 
-    `regressor`    : linear_model instance, optional (default=None)
+    `regressor`    : regressor instance, optional (default=None)
         If provided, this object is used to perform the regression from hidden
         unit activations to the outputs and subsequent predictions.  If not
-        present, a simple least squares fit is performed internally.
+        present, an ordinary linear least squares fit is performed
 
     Attributes
     ----------
@@ -333,8 +340,9 @@ class SimpleELMRegressor(BaseEstimator, RegressorMixin):
     SimpleELMRegressor is a regressor based on the Extreme Learning Machine.
 
     An Extreme Learning Machine (ELM) is a single layer feedforward
-    network with a random hidden layer components and least-squares fitting
-    of the hidden->output weights by default. [1][2]
+    network with a random hidden layer components and ordinary linear
+    least squares fitting of the hidden->output weights by default.
+    [1][2]
 
     SimpleELMRegressor is a wrapper for an ELMRegressor that uses a
     SimpleRandomHiddenLayer and passes the __init__ parameters through
@@ -345,14 +353,14 @@ class SimpleELMRegressor(BaseEstimator, RegressorMixin):
     `n_hidden` : int, optional (default=20)
         Number of units to generate in the SimpleRandomHiddenLayer
 
-    `xfer_func` : {callable, string} optional (default='tanh')
+    `activation_func` : {callable, string} optional (default='tanh')
         Function used to transform input activation
         It must be one of 'tanh', 'sine', 'tribas', 'sigmoid', 'hardlim' or
         a callable.  If none is given, 'tanh' will be used. If a callable
         is given, it will be used to compute the hidden unit activations.
 
-    `xfer_args` : dictionary, optional (default=None)
-        Supplies keyword arguments for a callable xfer_func
+    `activation_args` : dictionary, optional (default=None)
+        Supplies keyword arguments for a callable activation_func
 
     `random_state`  : int, RandomState instance or None (default=None)
         Control the pseudo random number generator used to generate the
@@ -376,12 +384,13 @@ class SimpleELMRegressor(BaseEstimator, RegressorMixin):
               2006.
     """
 
-    def __init__(self, n_hidden=20, xfer_func='tanh', xfer_args=None,
+    def __init__(self, n_hidden=20,
+                 activation_func='tanh', activation_args=None,
                  random_state=None):
 
         self.n_hidden = n_hidden
-        self.xfer_func = xfer_func
-        self.xfer_args = xfer_args
+        self.activation_func = activation_func
+        self.activation_args = activation_args
         self.random_state = random_state
 
         self.elm_regressor_ = None
@@ -407,8 +416,8 @@ class SimpleELMRegressor(BaseEstimator, RegressorMixin):
             Returns an instance of self.
         """
         rhl = SimpleRandomHiddenLayer(n_hidden=self.n_hidden,
-                                      xfer_func=self.xfer_func,
-                                      xfer_args=self.xfer_args,
+                                      activation_func=self.activation_func,
+                                      activation_args=self.activation_args,
                                       random_state=self.random_state)
 
         self.elm_regressor_ = ELMRegressor(hidden_layer=rhl)
@@ -440,8 +449,9 @@ class SimpleELMClassifier(BaseEstimator, ClassifierMixin):
     SimpleELMClassifier is a classifier based on the Extreme Learning Machine.
 
     An Extreme Learning Machine (ELM) is a single layer feedforward
-    network with a random hidden layer components and least-squares fitting
-    of the hidden->output weights by default. [1][2]
+    network with a random hidden layer components and ordinary linear
+    least squares fitting of the hidden->output weights by default.
+    [1][2]
 
     SimpleELMClassifier is a wrapper for an ELMClassifier that uses a
     SimpleRandomHiddenLayer and passes the __init__ parameters through
@@ -452,14 +462,14 @@ class SimpleELMClassifier(BaseEstimator, ClassifierMixin):
     `n_hidden` : int, optional (default=20)
         Number of units to generate in the SimpleRandomHiddenLayer
 
-    `xfer_func` : {callable, string} optional (default='tanh')
+    `activation_func` : {callable, string} optional (default='tanh')
         Function used to transform input activation
         It must be one of 'tanh', 'sine', 'tribas', 'sigmoid', 'hardlim' or
         a callable.  If none is given, 'tanh' will be used. If a callable
         is given, it will be used to compute the hidden unit activations.
 
-    `xfer_args` : dictionary, optional (default=None)
-        Supplies keyword arguments for a callable xfer_func
+    `activation_args` : dictionary, optional (default=None)
+        Supplies keyword arguments for a callable activation_func
 
     `random_state`  : int, RandomState instance or None (default=None)
         Control the pseudo random number generator used to generate the
@@ -486,12 +496,13 @@ class SimpleELMClassifier(BaseEstimator, ClassifierMixin):
               2006.
     """
 
-    def __init__(self, n_hidden=20, xfer_func='tanh', xfer_args=None,
+    def __init__(self, n_hidden=20,
+                 activation_func='tanh', activation_args=None,
                  random_state=None):
 
         self.n_hidden = n_hidden
-        self.xfer_func = xfer_func
-        self.xfer_args = xfer_args
+        self.activation_func = activation_func
+        self.activation_args = activation_args
         self.random_state = random_state
 
         self.elm_classifier_ = None
@@ -538,8 +549,8 @@ class SimpleELMClassifier(BaseEstimator, ClassifierMixin):
             Returns an instance of self.
         """
         rhl = SimpleRandomHiddenLayer(n_hidden=self.n_hidden,
-                                      xfer_func=self.xfer_func,
-                                      xfer_args=self.xfer_args,
+                                      activation_func=self.activation_func,
+                                      activation_args=self.activation_args,
                                       random_state=self.random_state)
 
         self.elm_classifier_ = ELMClassifier(hidden_layer=rhl)

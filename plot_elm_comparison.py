@@ -137,17 +137,21 @@ def make_classifiers():
 
     # pass user defined transfer func
     sinsq = (lambda x: np.power(np.sin(x), 2.0))
-    srhl_sinsq = SimpleRandomHiddenLayer(n_hidden=nh, xfer_func=sinsq,
+    srhl_sinsq = SimpleRandomHiddenLayer(n_hidden=nh,
+                                         activation_func=sinsq,
                                          random_state=0)
 
     # use internal transfer funcs
-    srhl_tanh = SimpleRandomHiddenLayer(n_hidden=nh, xfer_func='tanh',
+    srhl_tanh = SimpleRandomHiddenLayer(n_hidden=nh,
+                                        activation_func='tanh',
                                         random_state=0)
 
-    srhl_tribas = SimpleRandomHiddenLayer(n_hidden=nh, xfer_func='tribas',
+    srhl_tribas = SimpleRandomHiddenLayer(n_hidden=nh,
+                                          activation_func='tribas',
                                           random_state=0)
 
-    srhl_hardlim = SimpleRandomHiddenLayer(n_hidden=nh, xfer_func='hardlim',
+    srhl_hardlim = SimpleRandomHiddenLayer(n_hidden=nh,
+                                           activation_func='hardlim',
                                            random_state=0)
 
     # use gaussian RBF

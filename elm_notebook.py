@@ -5,7 +5,8 @@
 
 # Demo python notebook for sklearn elm and random_hidden_layer modules
 #
-# Author: David C. Lambert
+# Author: David C. Lambert [dcl -at- panix -dot- com]
+# Copyright(c) 2013
 # License: Simple BSD
 
 # <codecell>
@@ -78,36 +79,36 @@ plot(xtoy, ytoy)
 # <codecell>
 
 # RBF tests
-elmc = ELMClassifier(RBFRandomHiddenLayer(xfer_func='gaussian'))
+elmc = ELMClassifier(RBFRandomHiddenLayer(activation_func='gaussian'))
 tr,ts = res_dist(irx, iry, elmc, n_runs=100, random_state=0)
 
-elmc = ELMClassifier(RBFRandomHiddenLayer(xfer_func='poly_spline', gamma=2))
+elmc = ELMClassifier(RBFRandomHiddenLayer(activation_func='poly_spline', gamma=2))
 tr,ts = res_dist(irx, iry, elmc, n_runs=100, random_state=0)
 
-elmc = ELMClassifier(RBFRandomHiddenLayer(xfer_func='multiquadric'))
+elmc = ELMClassifier(RBFRandomHiddenLayer(activation_func='multiquadric'))
 tr,ts = res_dist(irx, iry, elmc, n_runs=100, random_state=0)
 
 # Simple tests
-elmc = ELMClassifier(SimpleRandomHiddenLayer(xfer_func='sine'))
+elmc = ELMClassifier(SimpleRandomHiddenLayer(activation_func='sine'))
 tr,ts = res_dist(irx, iry, elmc, n_runs=100, random_state=0)
 
-elmc = ELMClassifier(SimpleRandomHiddenLayer(xfer_func='tanh'))
+elmc = ELMClassifier(SimpleRandomHiddenLayer(activation_func='tanh'))
 tr,ts = res_dist(irx, iry, elmc, n_runs=100, random_state=0)
 
-elmc = ELMClassifier(SimpleRandomHiddenLayer(xfer_func='tribas'))
+elmc = ELMClassifier(SimpleRandomHiddenLayer(activation_func='tribas'))
 tr,ts = res_dist(irx, iry, elmc, n_runs=100, random_state=0)
 
-elmc = ELMClassifier(SimpleRandomHiddenLayer(xfer_func='sigmoid'))
+elmc = ELMClassifier(SimpleRandomHiddenLayer(activation_func='sigmoid'))
 tr,ts = res_dist(irx, iry, elmc, n_runs=100, random_state=0)
 
-elmc = ELMClassifier(SimpleRandomHiddenLayer(xfer_func='hardlim'))
+elmc = ELMClassifier(SimpleRandomHiddenLayer(activation_func='hardlim'))
 tr,ts = res_dist(irx, iry, elmc, n_runs=100, random_state=0)
 
 # <codecell>
 
 hardlim = (lambda a: np.array(a > 0.0, dtype=float))
 tribas = (lambda a: np.clip(1.0 - np.fabs(a), 0.0, 1.0))
-elmr = ELMRegressor(SimpleRandomHiddenLayer(random_state=0, xfer_func=tribas))
+elmr = ELMRegressor(SimpleRandomHiddenLayer(random_state=0, activation_func=tribas))
 elmr.fit(xtoy_train, ytoy_train)
 print elmr.score(xtoy_train, ytoy_train), elmr.score(xtoy_test, ytoy_test)
 plot(xtoy, ytoy, xtoy, elmr.predict(xtoy))
@@ -131,8 +132,8 @@ plot(xtoy, ytoy, xtoy, elmr.predict(xtoy))
 nh = 10
 (ctrs, _, _) = k_means(xtoy_train, nh)
 unit_rs = np.ones(nh)
-rhl = RBFRandomHiddenLayer(n_hidden=nh, xfer_func='poly_spline', gamma=5)
-#rhl = RBFRandomHiddenLayer(n_hidden=nh, xfer_func='multiquadric', gamma=1)
+rhl = RBFRandomHiddenLayer(n_hidden=nh, activation_func='poly_spline', gamma=3)
+#rhl = RBFRandomHiddenLayer(n_hidden=nh, activation_func='multiquadric', gamma=1)
 #rhl = RBFRandomHiddenLayer(n_hidden=nh, centers=ctrs, radii=unit_rs, gamma=4)
 elmr = ELMRegressor(hidden_layer=rhl)
 elmr.fit(xtoy_train, ytoy_train)
@@ -150,7 +151,7 @@ def powtanh_xfer(activations, power=1.0):
     return pow(np.tanh(activations), power)
 
 #tanh_rhl = SimpleRandomHiddenLayer(n_hidden=5000, random_state=0)
-tanh_rhl = SimpleRandomHiddenLayer(n_hidden=5000, xfer_func=powtanh_xfer, xfer_args={'power':2.0})
+tanh_rhl = SimpleRandomHiddenLayer(n_hidden=5000, activation_func=powtanh_xfer, activation_args={'power':2.0})
 elmc_tanh = ELMClassifier(hidden_layer=tanh_rhl)
 elmc_tanh.fit(dgx_train, dgy_train)
 print elmc_tanh.score(dgx_train, dgy_train), elmc_tanh.score(dgx_test, dgy_test)
@@ -191,7 +192,7 @@ print elmc.score(dgx_train, dgy_train), elmc.score(dgx_test, dgy_test)
 
 # <codecell>
 
-elmc = SimpleELMClassifier(n_hidden=500, xfer_func='hardlim')
+elmc = SimpleELMClassifier(n_hidden=500, activation_func='hardlim')
 elmc.fit(dgx_train, dgy_train)
 print elmc.score(dgx_train, dgy_train), elmc.score(dgx_test, dgy_test)
 
@@ -204,8 +205,11 @@ plot(xtoy, ytoy, xtoy, elmr.predict(xtoy))
 
 # <codecell>
 
-elmr = SimpleELMRegressor(xfer_func='tribas')
+elmr = SimpleELMRegressor(activation_func='tribas')
 elmr.fit(xtoy_train, ytoy_train)
 print elmr.score(xtoy_train, ytoy_train), elmr.score(xtoy_test, ytoy_test)
 plot(xtoy, ytoy, xtoy, elmr.predict(xtoy))
+
+# <codecell>
+
 
