@@ -72,9 +72,9 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.cross_validation import train_test_split
 from sklearn.linear_model import LogisticRegression
 
-from sklearn.neural_networks.elm import ELMClassifier
-from sklearn.neural_networks.random_hidden_layer import RBFRandomHiddenLayer
-from sklearn.neural_networks.random_hidden_layer import SimpleRandomHiddenLayer
+from elm import ELMClassifier
+from random_hidden_layer import RBFRandomHiddenLayer
+from random_hidden_layer import SimpleRandomHiddenLayer
 
 
 def get_data_bounds(X):
