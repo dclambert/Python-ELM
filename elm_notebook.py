@@ -3,7 +3,7 @@
 
 # <codecell>
 
-# Demo python notebook for sklearn elm and random_hidden_layer modules
+# Demo python notebook for elm and random_hidden_layer modules
 #
 # Author: David C. Lambert [dcl -at- panix -dot- com]
 # Copyright(c) 2013
@@ -209,7 +209,4 @@ elmr = SimpleELMRegressor(activation_func='tribas')
 elmr.fit(xtoy_train, ytoy_train)
 print elmr.score(xtoy_train, ytoy_train), elmr.score(xtoy_test, ytoy_test)
 plot(xtoy, ytoy, xtoy, elmr.predict(xtoy))
-
-# <codecell>
-
 

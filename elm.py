@@ -4,7 +4,7 @@
 # License: Simple BSD
 
 """
-The :mod:`sklearn.neural_networks.elm` module implements the
+The :mod:`elm` module implements the
 Extreme Learning Machine Classifiers and Regressors (ELMClassifier,
 ELMRegressor, SimpleELMRegressor, SimpleELMClassifier).
 
@@ -24,11 +24,12 @@ References
 from abc import ABCMeta, abstractmethod
 
 import numpy as np
+from scipy.linalg import pinv2
 
 from sklearn.utils import as_float_array
+from sklearn.utils.extmath import safe_sparse_dot
 from sklearn.base import BaseEstimator, ClassifierMixin, RegressorMixin
 from sklearn.preprocessing import LabelBinarizer
-from sklearn.linear_model import LinearRegression
 
 from random_hidden_layer import SimpleRandomHiddenLayer
 
@@ -140,11 +141,9 @@ class ELMRegressor(BaseELM, RegressorMixin):
 
         super(ELMRegressor, self).__init__(hidden_layer, regressor)
 
+        self.coefs_ = None
         self.fitted_ = False
         self.hidden_activations_ = None
-        self._lin_reg = LinearRegression(copy_X=False,
-                                         normalize=False,
-                                         fit_intercept=False)
 
     def _fit_regression(self, y):
         """
@@ -152,7 +151,7 @@ class ELMRegressor(BaseELM, RegressorMixin):
         or supplied regressor
         """
         if (self.regressor is None):
-            self._lin_reg.fit(self.hidden_activations_, y)
+            self.coefs_ = safe_sparse_dot(pinv2(self.hidden_activations_), y)
         else:
             self.regressor.fit(self.hidden_activations_, y)
 
@@ -189,7 +188,7 @@ class ELMRegressor(BaseELM, RegressorMixin):
     def _get_predictions(self, X):
         """get predictions using internal least squares/supplied regressor"""
         if (self.regressor is None):
-            preds = self._lin_reg.predict(self.hidden_activations_)
+            preds = safe_sparse_dot(self.hidden_activations_, self.coefs_)
         else:
             preds = self.regressor.predict(self.hidden_activations_)
 

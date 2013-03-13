@@ -3,7 +3,7 @@
 # Copyright(c) 2013
 # License: Simple BSD
 
-"""The :mod:`sklearn.neural_networks.random_hidden_layer` module
+"""The :mod:`random_hidden_layer` module
 implements Random Hidden Layer transformers.
 
 Random hidden layers are arrays of hidden unit activations that are
