@@ -73,8 +73,7 @@ from sklearn.cross_validation import train_test_split
 from sklearn.linear_model import LogisticRegression
 
 from elm import ELMClassifier
-from random_hidden_layer import RBFRandomHiddenLayer
-from random_hidden_layer import SimpleRandomHiddenLayer
+from random_layer import RBFRandomLayer, SimpleRandomLayer
 
 
 def get_data_bounds(X):
@@ -137,25 +136,25 @@ def make_classifiers():
 
     # pass user defined transfer func
     sinsq = (lambda x: np.power(np.sin(x), 2.0))
-    srhl_sinsq = SimpleRandomHiddenLayer(n_hidden=nh,
-                                         activation_func=sinsq,
-                                         random_state=0)
+    srhl_sinsq = SimpleRandomLayer(n_hidden=nh,
+                                   activation_func=sinsq,
+                                   random_state=0)
 
     # use internal transfer funcs
-    srhl_tanh = SimpleRandomHiddenLayer(n_hidden=nh,
-                                        activation_func='tanh',
-                                        random_state=0)
+    srhl_tanh = SimpleRandomLayer(n_hidden=nh,
+                                  activation_func='tanh',
+                                  random_state=0)
 
-    srhl_tribas = SimpleRandomHiddenLayer(n_hidden=nh,
-                                          activation_func='tribas',
-                                          random_state=0)
+    srhl_tribas = SimpleRandomLayer(n_hidden=nh,
+                                    activation_func='tribas',
+                                    random_state=0)
 
-    srhl_hardlim = SimpleRandomHiddenLayer(n_hidden=nh,
-                                           activation_func='hardlim',
-                                           random_state=0)
+    srhl_hardlim = SimpleRandomLayer(n_hidden=nh,
+                                     activation_func='hardlim',
+                                     random_state=0)
 
     # use gaussian RBF
-    srhl_rbf = RBFRandomHiddenLayer(n_hidden=nh*2, gamma=0.1, random_state=0)
+    srhl_rbf = RBFRandomLayer(n_hidden=nh*2, gamma=0.1, random_state=0)
 
     log_reg = LogisticRegression()
 
