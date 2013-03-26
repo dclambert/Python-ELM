@@ -2,19 +2,19 @@ Python-ELM
 ==========
 
 Extreme Learning Machine implementation in Python
-Version  1.0
+Version  0.2
 
 This is an implementation of the Extreme Learning Machine in python,
 based on the scikit-learn machine learning library.
 
 Distance and dot product based hidden layers are provided via the
-RBFRandomHiddenLayer and SimpleRandomHiddenLayer classes respectively.
+RBFRandomLayer and SimpleRandomLayer classes respectively.
 
-The SimpleRandomHiddenLayer provides the following activation functions:
+The SimpleRandomLayer provides the following activation functions:
 
     tanh, sine, tribas, sigmoid, hardlim
 
-The RBFRandomHiddenLayer provides the following activation functions:
+The RBFRandomLayer provides the following activation functions:
 
     gaussian, multiquadric and polyharmonic spline ('poly_spline')
 

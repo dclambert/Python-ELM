@@ -28,12 +28,12 @@ from sklearn.utils import check_random_state, atleast2d_or_csr
 from sklearn.utils.extmath import safe_sparse_dot
 from sklearn.base import BaseEstimator, TransformerMixin
 
-__all__ = ['SimpleRandomHiddenLayer',
-           'RBFRandomHiddenLayer']
+__all__ = ['SimpleRandomLayer',
+           'RBFRandomLayer']
 
 
 # Abstract Base Class for random hidden layers
-class BaseRandomHiddenLayer(BaseEstimator, TransformerMixin):
+class BaseRandomLayer(BaseEstimator, TransformerMixin):
     __metaclass__ = ABCMeta
 
     _internal_activation_funcs = dict()
@@ -130,7 +130,7 @@ class BaseRandomHiddenLayer(BaseEstimator, TransformerMixin):
         return self._compute_hidden_activations(X)
 
 
-class SimpleRandomHiddenLayer(BaseRandomHiddenLayer):
+class SimpleRandomLayer(BaseRandomLayer):
     """Simple Random Hidden Layer transformer
 
     Creates a layer of units as a specified functions of an activation
@@ -173,7 +173,7 @@ class SimpleRandomHiddenLayer(BaseRandomHiddenLayer):
     See Also
     --------
     ELMRegressor, ELMClassifier, SimpleELMRegressor, SimpleELMClassifier,
-    RBFRandomHiddenLayer
+    RBFRandomLayer
     """
 
     #
@@ -201,10 +201,10 @@ class SimpleRandomHiddenLayer(BaseRandomHiddenLayer):
     def __init__(self, n_hidden=20, random_state=None,
                  activation_func='tanh', activation_args=None):
 
-        super(SimpleRandomHiddenLayer, self).__init__(n_hidden,
-                                                      random_state,
-                                                      activation_func,
-                                                      activation_args)
+        super(SimpleRandomLayer, self).__init__(n_hidden,
+                                                random_state,
+                                                activation_func,
+                                                activation_args)
 
         if (isinstance(self.activation_func, str)):
             func_names = self._internal_activation_funcs.keys()
@@ -235,7 +235,7 @@ class SimpleRandomHiddenLayer(BaseRandomHiddenLayer):
 
 
 # Random Hidden Layer of radial basis function units
-class RBFRandomHiddenLayer(BaseRandomHiddenLayer):
+class RBFRandomLayer(BaseRandomLayer):
     """Random RBF Hidden Layer transformer
 
     Creates a layer of radial basis function units where:
@@ -296,7 +296,7 @@ class RBFRandomHiddenLayer(BaseRandomHiddenLayer):
     See Also
     --------
     ELMRegressor, ELMClassifier, SimpleELMRegressor, SimpleELMClassifier,
-    SimpleRandomHiddenLayer
+    SimpleRandomLayer
     """
 
     #
@@ -337,10 +337,10 @@ class RBFRandomHiddenLayer(BaseRandomHiddenLayer):
                  gamma=1.0, centers=None, radii=None,
                  use_exemplars=False):
 
-        super(RBFRandomHiddenLayer, self).__init__(n_hidden,
-                                                   random_state,
-                                                   activation_func,
-                                                   activation_args)
+        super(RBFRandomLayer, self).__init__(n_hidden,
+                                             random_state,
+                                             activation_func,
+                                             activation_args)
 
         if (isinstance(self.activation_func, str)):
             func_names = self._internal_activation_funcs.keys()
