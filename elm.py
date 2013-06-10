@@ -146,7 +146,7 @@ class GenELMRegressor(BaseELM, RegressorMixin):
 
     def _fit_regression(self, y):
         """
-        fit regression using Moore-Penrose pseudo-inverse
+        fit regression using pseudo-inverse
         or supplied regressor
         """
         if (self.regressor is None):
