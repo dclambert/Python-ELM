@@ -3,10 +3,10 @@
 # Copyright(c) 2013
 # License: Simple BSD
 
-"""The :mod:`random_hidden_layer` module
-implements Random Hidden Layer transformers.
+"""The :mod:`random_layer` module
+implements Random Layer transformers.
 
-Random hidden layers are arrays of hidden unit activations that are
+Random layers are arrays of hidden unit activations that are
 random functions of input activation values (dot products for simple
 activation functions, distances from prototypes for radial basis
 functions).
@@ -21,15 +21,18 @@ from math import sqrt
 
 import numpy as np
 import scipy.sparse as sp
-from scipy.spatial.distance import cdist
+from scipy.spatial.distance import cdist, pdist, squareform
 
 from sklearn.metrics import pairwise_distances
 from sklearn.utils import check_random_state, atleast2d_or_csr
 from sklearn.utils.extmath import safe_sparse_dot
 from sklearn.base import BaseEstimator, TransformerMixin
 
-__all__ = ['SimpleRandomLayer',
-           'RBFRandomLayer']
+__all__ = ['RandomLayer',
+           'MLPRandomLayer',
+           'RBFRandomLayer',
+           'GRBFRandomLayer',
+           ]
 
 
 # Abstract Base Class for random hidden layers
@@ -37,6 +40,10 @@ class BaseRandomLayer(BaseEstimator, TransformerMixin):
     __metaclass__ = ABCMeta
 
     _internal_activation_funcs = dict()
+
+    @classmethod
+    def activation_func_names(cls):
+        return cls._internal_activation_funcs.keys()
 
     # take n_hidden and random_state, init components_ and
     # input_activations_
@@ -130,29 +137,64 @@ class BaseRandomLayer(BaseEstimator, TransformerMixin):
         return self._compute_hidden_activations(X)
 
 
-class SimpleRandomLayer(BaseRandomLayer):
-    """Simple Random Hidden Layer transformer
+class RandomLayer(BaseRandomLayer):
+    """RandomLayer is a transformer that creates a feature mapping of the
+    inputs that corresponds to a layer of hidden units with randomly
+    generated components.
 
-    Creates a layer of units as a specified functions of an activation
-    value determined by the dot product of the input and a random vector
-    plus a random bias term:
+    The transformed values are a specified function of input activations
+    that are a weighted combination of dot product (multilayer perceptron)
+    and distance (rbf) activations:
 
-     f(a), s.t. a = dot(x, hidden_weights) + bias
+      input_activation = alpha * mlp_activation + (1-alpha) * rbf_activation
 
-    and transfer function f() which defaults to numpy.tanh if not supplied
-    but can be any callable that returns an array of the same shape as
-    its argument (input activation array, shape [n_samples, n_hidden])
+      mlp_activation(x) = dot(x, weights) + bias
+      rbf_activation(x) = rbf_width * ||x - center||/radius
+
+      alpha and rbf_width are specified by the user
+
+      weights and biases are taken from normal distribution of
+      mean 0 and sd of 1
+
+      centers are taken uniformly from the bounding hyperrectangle
+      of the inputs, and radii are max(||x-c||)/sqrt(n_centers*2)
+
+    The input activation is transformed by a transfer function that defaults
+    to numpy.tanh if not specified, but can be any callable that returns an
+    array of the same shape as its argument (the input activation array, of
+    shape [n_samples, n_hidden]).  Functions provided are 'sine', 'tanh',
+    'tribas', 'inv_tribas', 'sigmoid', 'hardlim', 'softlim', 'gaussian',
+    'multiquadric', or 'inv_multiquadric'.
 
     Parameters
     ----------
     `n_hidden` : int, optional (default=20)
         Number of units to generate
 
+    `alpha` : float, optional (default=0.5)
+        Mixing coefficient for distance and dot product input activations:
+        activation = alpha*mlp_activation + (1-alpha)*rbf_width*rbf_activation
+
+    `rbf_width` : float, optional (default=1.0)
+        multiplier on rbf_activation
+
+    `user_components`: dictionary, optional (default=None)
+        dictionary containing values for components that woud otherwise be
+        randomly generated.  Valid key/value pairs are as follows:
+           'radii'  : array-like of shape [n_hidden]
+           'centers': array-like of shape [n_hidden, n_features]
+           'biases' : array-like of shape [n_hidden]
+           'weights': array-like of shape [n_features, n_hidden]
+
     `activation_func` : {callable, string} optional (default='tanh')
         Function used to transform input activation
-        It must be one of 'tanh', 'sine', 'tribas', 'sigmoid', 'hardlim' or
-        a callable.  If none is given, 'tanh' will be used. If a callable
-        is given, it will be used to compute the hidden unit activations.
+
+        It must be one of 'tanh', 'sine', 'tribas', 'inv_tribas',
+        'sigmoid', 'hardlim', 'softlim', 'gaussian', 'multiquadric',
+        'inv_multiquadric' or a callable.  If None is given, 'tanh'
+        will be used.
+
+        If a callable is given, it will be used to compute the activations.
 
     `activation_args` : dictionary, optional (default=None)
         Supplies keyword arguments for a callable activation_func
@@ -172,103 +214,223 @@ class SimpleRandomLayer(BaseRandomLayer):
 
     See Also
     --------
-    ELMRegressor, ELMClassifier, SimpleELMRegressor, SimpleELMClassifier,
-    RBFRandomLayer
     """
-
-    #
-    # internal transfer function (RBF) definitions
-    #
-
-    # triangular transfer function
+    # triangular activation function
     _tribas = (lambda x: np.clip(1.0 - np.fabs(x), 0.0, 1.0))
 
-    # sigmoid transfer function
+    # inverse triangular activation function
+    _inv_tribas = (lambda x: np.clip(np.fabs(x), 0.0, 1.0))
+
+    # sigmoid activation function
     _sigmoid = (lambda x: 1.0/(1.0 + np.exp(-x)))
 
-    # hard limit transfer function
+    # hard limit activation function
     _hardlim = (lambda x: np.array(x > 0.0, dtype=float))
 
-    # internal transfer function table
+    _softlim = (lambda x: np.clip(x, 0.0, 1.0))
+
+    # gaussian RBF
+    _gaussian = (lambda x: np.exp(-pow(x, 2.0)))
+
+    # multiquadric RBF
+    _multiquadric = (lambda x:
+                     np.sqrt(1.0 + pow(x, 2.0)))
+
+    # inverse multiquadric RBF
+    _inv_multiquadric = (lambda x:
+                         1.0/(np.sqrt(1.0 + pow(x, 2.0))))
+
+    # internal activation function table
     _internal_activation_funcs = {'sine': np.sin,
                                   'tanh': np.tanh,
                                   'tribas': _tribas,
+                                  'inv_tribas': _inv_tribas,
                                   'sigmoid': _sigmoid,
-                                  'hardlim': _hardlim
+                                  'softlim': _softlim,
+                                  'hardlim': _hardlim,
+                                  'inv_tribas': _inv_tribas,
+                                  'gaussian': _gaussian,
+                                  'multiquadric': _multiquadric,
+                                  'inv_multiquadric': _inv_multiquadric,
                                   }
 
-    # default setup, plus initialization of activation_func
-    def __init__(self, n_hidden=20, random_state=None,
-                 activation_func='tanh', activation_args=None):
+    def __init__(self, n_hidden=20, alpha=0.5, random_state=None,
+                 activation_func='tanh', activation_args=None,
+                 user_components=None, rbf_width=1.0):
 
-        super(SimpleRandomLayer, self).__init__(n_hidden,
-                                                random_state,
-                                                activation_func,
-                                                activation_args)
+        super(RandomLayer, self).__init__(n_hidden=n_hidden,
+                                          random_state=random_state,
+                                          activation_func=activation_func,
+                                          activation_args=activation_args)
 
         if (isinstance(self.activation_func, str)):
             func_names = self._internal_activation_funcs.keys()
             if (self.activation_func not in func_names):
-                msg = "unknown transfer function '%s'" % self.activation_func
+                msg = "unknown activation function '%s'" % self.activation_func
                 raise ValueError(msg)
+
+        self.alpha = alpha
+        self.rbf_width = rbf_width
+        self.user_components = user_components
+
+        self._use_mlp_input = (self.alpha != 0.0)
+        self._use_rbf_input = (self.alpha != 1.0)
+
+    def _get_user_components(self, key):
+        try:
+            return self.user_components[key]
+        except (TypeError, KeyError):
+            return None
+
+    # compute radii
+    def _compute_radii(self, X):
+        # use supplied radii if present
+        radii = self._get_user_components('radii')
+
+        # compute radii
+        if (radii is None):
+            centers = self.components_['centers']
+
+            n_centers = centers.shape[0]
+            max_dist = np.max(pairwise_distances(centers))
+            radii = np.ones(n_centers) * max_dist/sqrt(2.0 * n_centers)
+
+        self.components_['radii'] = radii
+
+    # compute centers
+    def _compute_centers(self, X, sparse, rs):
+        # use supplied centers if present
+        centers = self._get_user_components('centers')
+
+        # use points taken uniformly from the bounding
+        # hyperrectangle
+        if (centers is None):
+            n_samples, n_features = X.shape
+
+            if (sparse):
+                fxr = xrange(n_features)
+                cols = [X.getcol(i) for i in fxr]
+
+                min_dtype = X.dtype.type(1.0e10)
+                sp_min = lambda col: np.minimum(min_dtype, np.min(col.data))
+                min_Xs = np.array(map(sp_min, cols))
+
+                max_dtype = X.dtype.type(-1.0e10)
+                sp_max = lambda col: np.maximum(max_dtype, np.max(col.data))
+                max_Xs = np.array(map(sp_max, cols))
+            else:
+                min_Xs = X.min(axis=0)
+                max_Xs = X.max(axis=0)
+
+            spans = max_Xs - min_Xs
+            ctrs_size = (self.n_hidden, n_features)
+            centers = min_Xs + spans * rs.uniform(0.0, 1.0, ctrs_size)
+
+        self.components_['centers'] = centers
+
+    def _compute_biases(self, X, rs):
+        # use supplied biases if present
+        biases = self._get_user_components('biases')
+        if (biases is None):
+            b_size = self.n_hidden
+            biases = rs.normal(size=b_size)
+
+        self.components_['biases'] = biases
+
+    def _compute_weights(self, X, rs):
+        # use supplied weights if present
+        weights = self._get_user_components('weights')
+        if (weights is None):
+            n_features = X.shape[1]
+            hw_size = (n_features, self.n_hidden)
+            weights = rs.normal(size=hw_size)
+
+        self.components_['weights'] = weights
 
     def _generate_components(self, X):
         """Generate components of hidden layer given X"""
 
-        rand_state = check_random_state(self.random_state)
-        n_features = X.shape[1]
+        rs = check_random_state(self.random_state)
+        if (self._use_mlp_input):
+            self._compute_biases(X, rs)
+            self._compute_weights(X, rs)
 
-        b_size = self.n_hidden
-        hw_size = (n_features, self.n_hidden)
-
-        self.components_['biases'] = rand_state.normal(size=b_size)
-        self.components_['weights'] = rand_state.normal(size=hw_size)
+        if (self._use_rbf_input):
+            self._compute_centers(X, sp.issparse(X), rs)
+            self._compute_radii(X)
 
     def _compute_input_activations(self, X):
         """Compute input activations given X"""
 
-        b = self.components_['biases']
-        w = self.components_['weights']
+        n_samples = X.shape[0]
 
-        self.input_activations_ = safe_sparse_dot(X, w)
-        self.input_activations_ += b
+        mlp_acts = np.zeros((n_samples, self.n_hidden))
+        if (self._use_mlp_input):
+            b = self.components_['biases']
+            w = self.components_['weights']
+            mlp_acts = self.alpha * (safe_sparse_dot(X, w) + b)
+
+        rbf_acts = np.zeros((n_samples, self.n_hidden))
+        if (self._use_rbf_input):
+            radii = self.components_['radii']
+            centers = self.components_['centers']
+            scale = self.rbf_width * (1.0 - self.alpha)
+            rbf_acts = scale * cdist(X, centers)/radii
+
+        #print rbf_acts.shape, mlp_acts.shape, self.alpha
+        self.input_activations_ = mlp_acts + rbf_acts
 
 
-# Random Hidden Layer of radial basis function units
-class RBFRandomLayer(BaseRandomLayer):
-    """Random RBF Hidden Layer transformer
+class MLPRandomLayer(RandomLayer):
+    def __init__(self, n_hidden=20, random_state=None,
+                 activation_func='tanh', activation_args=None,
+                 weights=None, biases=None):
+
+        user_components = {'weights': weights, 'biases': biases}
+        super(MLPRandomLayer, self).__init__(n_hidden=n_hidden,
+                                             random_state=random_state,
+                                             activation_func=activation_func,
+                                             activation_args=activation_args,
+                                             user_components=user_components,
+                                             alpha=1.0)
+
+
+class RBFRandomLayer(RandomLayer):
+    def __init__(self, n_hidden=20, random_state=None,
+                 activation_func='gaussian', activation_args=None,
+                 centers=None, radii=None, rbf_width=1.0):
+
+        user_components = {'centers': centers, 'radii': radii}
+        super(RBFRandomLayer, self).__init__(n_hidden=n_hidden,
+                                             random_state=random_state,
+                                             activation_func=activation_func,
+                                             activation_args=activation_args,
+                                             user_components=user_components,
+                                             rbf_width=rbf_width,
+                                             alpha=0.0)
+
+
+class GRBFRandomLayer(RBFRandomLayer):
+    """Random Generalized RBF Hidden Layer transformer
 
     Creates a layer of radial basis function units where:
 
        f(a), s.t. a = ||x-c||/r
 
-    with c the unit center and r = max(||x-c||)/sqrt(n_centers*2).
-
-    f() defaults to exp(-gamma * a^2) (gaussian rbf)
-    gamma defaults to 1.0
-
-    If centers are not provided and use_exemplars is False (see below),
-    then centers are uniformly distributed over the input space.
+    with c the unit center
+    and f() is exp(-gamma * a^tau) where tau and r are computed
+    based on [1]
 
     Parameters
     ----------
     `n_hidden` : int, optional (default=20)
         Number of units to generate, ignored if centers are provided
 
-    `activation_func` : {callable, string} optional (default='gaussian')
-        Function used to transform input activation.
-        It must be one of 'gaussian', 'poly_spline', 'multiquadric' or
-        a callable.  If none is given, 'gaussian' will be used. If a
-        callable is given, it will be used to compute the hidden unit
-        activations.
-
-    `activation_args` : dictionary, optional (default=None)
-        Supplies keyword arguments for a callable activation_func
+    `grbf_lambda` : float, optional (default=0.05)
+        GRBF shape parameter
 
     `gamma` : {int, float} optional (default=1.0)
-        Width multiplier for RBF distance argument, ignored if callable
-        activation_func is provided.  Must be an int > 0 when activation_func
-        is 'poly_spline'.
+        Width multiplier for GRBF distance argument
 
     `centers` : array of shape (n_hidden, n_features), optional (default=None)
         If provided, overrides internal computation of the centers
@@ -297,132 +459,53 @@ class RBFRandomLayer(BaseRandomLayer):
     --------
     ELMRegressor, ELMClassifier, SimpleELMRegressor, SimpleELMClassifier,
     SimpleRandomLayer
+
+    References
+    ----------
+    .. [1] Fernandez-Navarro, et al, "MELM-GRBF: a modified version of the
+              extreme learning machine for generalized radial basis function
+              neural networks", Neurocomputing 74 (2011), 2502-2510
+
     """
+    def _grbf(acts, taus):
+        return np.exp(np.exp(-pow(acts, taus)))
 
-    #
-    # internal transfer function (RBF) definitions
-    #
+    _internal_activation_funcs = {'grbf': _grbf}
 
-    # gaussian RBF
-    _gaussian = (lambda x, gamma: np.exp(-gamma * pow(x, 2.0)))
+    def __init__(self, n_hidden=20, grbf_lambda=0.001,
+                 centers=None, radii=None, random_state=None):
 
-    # multiquadric spline RBF
-    _multiquadric = (lambda x, gamma:
-                     np.sqrt(1.0 + pow(gamma * x, 2.0)))
+        super(GRBFRandomLayer, self).__init__(n_hidden=n_hidden,
+                                              activation_func='grbf',
+                                              centers=centers, radii=radii,
+                                              random_state=random_state)
 
-    # polyharmonic spline RBF
-    def _poly_spline(acts, gamma):
-        if (not isinstance(gamma, int) or gamma < 1):
-            msg = 'Gamma must be integer > 0 for poly_spline'
-            raise ValueError(msg)
+        self.grbf_lambda = grbf_lambda
+        self.dN_vals = None
+        self.dF_vals = None
+        self.tau_vals = None
 
-        # add epsilon to avoid log(0) exception
-        epsilon = 1.0e-8
-        acts += epsilon
+    # get centers from superclass, then calculate tau_vals
+    # according to ref [1]
+    def _compute_centers(self, X, sparse, rs):
+        super(GRBFRandomLayer, self)._compute_centers(X, sparse, rs)
 
-        X_new = pow(acts, gamma)
-        if ((gamma % 2) == 0):
-            X_new *= np.log(acts)
-
-        return X_new
-
-    # internal RBF table
-    _internal_activation_funcs = {'gaussian': _gaussian,
-                                  'poly_spline': _poly_spline,
-                                  'multiquadric': _multiquadric
-                                  }
-
-    def __init__(self, n_hidden=20, random_state=None,
-                 activation_func='gaussian', activation_args=None,
-                 gamma=1.0, centers=None, radii=None,
-                 use_exemplars=False):
-
-        super(RBFRandomLayer, self).__init__(n_hidden,
-                                             random_state,
-                                             activation_func,
-                                             activation_args)
-
-        if (isinstance(self.activation_func, str)):
-            func_names = self._internal_activation_funcs.keys()
-            if (self.activation_func not in func_names):
-                msg = "unknown transfer function '%s'" % self.activation_func
-                raise ValueError(msg)
-
-        self.radii = radii
-        self.centers = centers
-        self.gamma = gamma
-        self.use_exemplars = use_exemplars
-
-    # property methods for 'gamma' arg, use
-    # self._extra_args dictionary
-    @property
-    def gamma(self):
-        return self._extra_args['gamma']
-
-    @gamma.setter
-    def gamma(self, value):
-        self._extra_args['gamma'] = value
-
-    def _generate_components(self, X):
-        """Generate components of hidden layer given X"""
-
-        sparse = sp.issparse(X)
-        self._compute_centers(X, sparse)
-        self._compute_radii(X, sparse)
-
-    def _compute_input_activations(self, X):
-        """Compute input activations given X"""
-
-        radii = self.components_['radii']
         centers = self.components_['centers']
+        sorted_distances = np.sort(squareform(pdist(centers)))
+        self.dF_vals = sorted_distances[:, -1]
+        self.dN_vals = sorted_distances[:, 1]/100.0
+        #self.dN_vals = 0.0002 * np.ones(self.dF_vals.shape)
 
-        self.input_activations_ = cdist(X, centers)/radii
+        tauNum = np.log(np.log(self.grbf_lambda) /
+                        np.log(1.0 - self.grbf_lambda))
 
-    # determine centers
-    def _compute_centers(self, X, sparse):
-        # use supplied centers
-        if (self.centers is not None):
-            centers = self.centers
+        tauDenom = np.log(self.dF_vals/self.dN_vals)
 
-        else:
-            n_samples, n_features = X.shape
-            rs = check_random_state(self.random_state)
+        self.tau_vals = tauNum/tauDenom
 
-            # use examples from the data as centers
-            if (self.use_exemplars):
-                if (n_samples < self.n_hidden):
-                    msg = "n_hidden must be <= n_samples when using exemplars"
-                    raise ValueError(msg)
+        self._extra_args['taus'] = self.tau_vals
 
-                max_index = n_samples - 1
-                indices = rs.permutation(max_index)[:self.n_hidden]
-                centers = X[indices, :]
-
-            # use uniformly distributed points from the input space as centers
-            else:
-                if (sparse):
-                    X_dtype = X.dtype.type(0)
-                    min_X = np.minimum(X_dtype, np.min(X.data))
-                    max_X = np.maximum(X_dtype, np.max(X.data))
-                else:
-                    min_X, max_X = np.min(X), np.max(X)
-
-                ctrs_size = (self.n_hidden, n_features)
-                centers = rs.uniform(min_X, max_X, ctrs_size)
-
-        self.components_['centers'] = centers
-
-    # compute radii
-    def _compute_radii(self, X, sparse):
-        # use supplied radii
-        if (self.radii is not None):
-            radii = self.radii
-
-        else:
-            centers = self.components_['centers']
-
-            n_centers = centers.shape[0]
-            max_dist = np.max(pairwise_distances(centers))
-            radii = np.ones(n_centers) * max_dist/sqrt(2.0 * n_centers)
-
-        self.components_['radii'] = radii
+    # get radii according to ref [1]
+    def _compute_radii(self, X):
+        denom = pow(-np.log(self.grbf_lambda), 1.0/self.tau_vals)
+        self.components_['radii'] = self.dF_vals/denom

@@ -31,12 +31,12 @@ from sklearn.utils.extmath import safe_sparse_dot
 from sklearn.base import BaseEstimator, ClassifierMixin, RegressorMixin
 from sklearn.preprocessing import LabelBinarizer
 
-from random_layer import SimpleRandomLayer
+from random_layer import RandomLayer, MLPRandomLayer
 
 __all__ = ["ELMRegressor",
            "ELMClassifier",
-           "SimpleELMRegressor",
-           "SimpleELMClassifier"]
+           "GenELMRegressor",
+           "GenELMClassifier"]
 
 
 # BaseELM class, regressor and hidden_layer attributes
@@ -92,7 +92,7 @@ class BaseELM(BaseEstimator):
         """
 
 
-class ELMRegressor(BaseELM, RegressorMixin):
+class GenELMRegressor(BaseELM, RegressorMixin):
     """
     ELMRegressor is a regressor based on the Extreme Learning Machine.
 
@@ -103,8 +103,8 @@ class ELMRegressor(BaseELM, RegressorMixin):
 
     Parameters
     ----------
-    `hidden_layer` : random_hidden_layer instance, optional
-        (default=SimpleRandomLayer(random_state=0))
+    `hidden_layer` : random_layer instance, optional
+        (default=MLPRandomLayer(random_state=0))
 
     `regressor`    : regressor instance, optional (default=None)
         If provided, this object is used to perform the regression from hidden
@@ -124,8 +124,7 @@ class ELMRegressor(BaseELM, RegressorMixin):
 
     See Also
     --------
-    RBFRandomLayer, SimpleRandomLayer, ELMRegressor, ELMClassifier
-    SimpleELMRegressor, SimpleELMClassifier
+    RBFRandomLayer, MLPRandomLayer, ELMRegressor, ELMClassifier
 
     References
     ----------
@@ -136,10 +135,10 @@ class ELMRegressor(BaseELM, RegressorMixin):
     """
 
     def __init__(self,
-                 hidden_layer=SimpleRandomLayer(random_state=0),
+                 hidden_layer=MLPRandomLayer(random_state=0),
                  regressor=None):
 
-        super(ELMRegressor, self).__init__(hidden_layer, regressor)
+        super(GenELMRegressor, self).__init__(hidden_layer, regressor)
 
         self.coefs_ = None
         self.fitted_ = False
@@ -147,7 +146,7 @@ class ELMRegressor(BaseELM, RegressorMixin):
 
     def _fit_regression(self, y):
         """
-        fit regression using internal linear regression
+        fit regression using Moore-Penrose pseudo-inverse
         or supplied regressor
         """
         if (self.regressor is None):
@@ -185,7 +184,7 @@ class ELMRegressor(BaseELM, RegressorMixin):
 
         return self
 
-    def _get_predictions(self, X):
+    def _get_predictions(self):
         """get predictions using internal least squares/supplied regressor"""
         if (self.regressor is None):
             preds = safe_sparse_dot(self.hidden_activations_, self.coefs_)
@@ -214,14 +213,14 @@ class ELMRegressor(BaseELM, RegressorMixin):
         self.hidden_activations_ = self.hidden_layer.transform(X)
 
         # compute output predictions for new hidden activations
-        predictions = self._get_predictions(X)
+        predictions = self._get_predictions()
 
         return predictions
 
 
-class ELMClassifier(BaseELM, ClassifierMixin):
+class GenELMClassifier(BaseELM, ClassifierMixin):
     """
-    ELMClassifier is a classifier based on the Extreme Learning Machine.
+    GenELMClassifier is a classifier based on the Extreme Learning Machine.
 
     An Extreme Learning Machine (ELM) is a single layer feedforward
     network with a random hidden layer components and ordinary linear
@@ -230,8 +229,11 @@ class ELMClassifier(BaseELM, ClassifierMixin):
 
     Parameters
     ----------
-    `hidden_layer` : random_hidden_layer instance, optional
-        (default=SimpleRandomLayer(random_state=0))
+    `hidden_layer` : random_layer instance, optional
+        (default=MLPRandomLayer(random_state=0))
+
+    `binarizer` : LabelBinarizer, optional
+        (default=LabelBinarizer(-1, 1))
 
     `regressor`    : regressor instance, optional (default=None)
         If provided, this object is used to perform the regression from hidden
@@ -243,16 +245,12 @@ class ELMClassifier(BaseELM, ClassifierMixin):
     `classes_` : numpy array of shape [n_classes]
         Array of class labels
 
-    `binarizer_` : LabelBinarizer instance
-        Used to transform class labels
-
     `elm_regressor_` : ELMRegressor instance
         Performs actual fit of binarized values
 
     See Also
     --------
-    RBFRandomLayer, SimpleRandomLayer, ELMRegressor, ELMClassifier
-    SimpleELMRegressor, SimpleELMClassifier
+    RBFRandomLayer, MLPRandomLayer, ELMRegressor, ELMClassifier
 
     References
     ----------
@@ -262,14 +260,16 @@ class ELMClassifier(BaseELM, ClassifierMixin):
               2006.
     """
     def __init__(self,
-                 hidden_layer=SimpleRandomLayer(random_state=0),
+                 hidden_layer=MLPRandomLayer(random_state=0),
+                 binarizer=LabelBinarizer(-1, 1),
                  regressor=None):
 
-        super(ELMClassifier, self).__init__(hidden_layer, regressor)
+        super(GenELMClassifier, self).__init__(hidden_layer, regressor)
+
+        self.binarizer = binarizer
 
         self.classes_ = None
-        self.binarizer_ = LabelBinarizer(-1, 1)
-        self.elm_regressor_ = ELMRegressor(hidden_layer, regressor)
+        self.genelm_regressor_ = GenELMRegressor(hidden_layer, regressor)
 
     def decision_function(self, X):
         """
@@ -286,7 +286,7 @@ class ELMClassifier(BaseELM, ClassifierMixin):
             Decision function values related to each class, per sample.
             In the two-class case, the shape is [n_samples,]
         """
-        return self.elm_regressor_.predict(X)
+        return self.genelm_regressor_.predict(X)
 
     def fit(self, X, y):
         """
@@ -310,9 +310,9 @@ class ELMClassifier(BaseELM, ClassifierMixin):
         """
         self.classes_ = np.unique(y)
 
-        y_bin = self.binarizer_.fit_transform(y)
+        y_bin = self.binarizer.fit_transform(y)
 
-        self.elm_regressor_.fit(X, y_bin)
+        self.genelm_regressor_.fit(X, y_bin)
         return self
 
     def predict(self, X):
@@ -328,38 +328,60 @@ class ELMClassifier(BaseELM, ClassifierMixin):
             Predicted values.
         """
         raw_predictions = self.decision_function(X)
-        class_predictions = self.binarizer_.inverse_transform(raw_predictions)
+        class_predictions = self.binarizer.inverse_transform(raw_predictions)
 
         return class_predictions
 
 
-# ELMRegressor with default SimpleRandomLayer
-class SimpleELMRegressor(BaseEstimator, RegressorMixin):
+# ELMRegressor with default RandomLayer
+class ELMRegressor(BaseEstimator, RegressorMixin):
     """
-    SimpleELMRegressor is a regressor based on the Extreme Learning Machine.
+    ELMRegressor is a regressor based on the Extreme Learning Machine.
 
     An Extreme Learning Machine (ELM) is a single layer feedforward
     network with a random hidden layer components and ordinary linear
     least squares fitting of the hidden->output weights by default.
     [1][2]
 
-    SimpleELMRegressor is a wrapper for an ELMRegressor that uses a
-    SimpleRandomLayer and passes the __init__ parameters through
-    to the hidden layer generated by the fit() method.
+    ELMRegressor is a wrapper for an GenELMRegressor that uses a
+    RandomLayer and exposes the RandomLayer's parameters in its
+    own constructor.
 
     Parameters
     ----------
     `n_hidden` : int, optional (default=20)
         Number of units to generate in the SimpleRandomLayer
 
+    `alpha` : float, optional (default=0.5)
+        Mixing coefficient for distance and dot product input activations:
+        activation = alpha*mlp_activation + (1-alpha)*rbf_width*rbf_activation
+
+    `rbf_width` : float, optional (default=1.0)
+        multiplier on rbf_activation
+
     `activation_func` : {callable, string} optional (default='tanh')
         Function used to transform input activation
-        It must be one of 'tanh', 'sine', 'tribas', 'sigmoid', 'hardlim' or
+
+        It must be one of 'tanh', 'sine', 'tribas', 'inv_tribase', 'sigmoid',
+        'hardlim', 'softlim', 'gaussian', 'multiquadric', 'inv_multiquadric' or
         a callable.  If none is given, 'tanh' will be used. If a callable
         is given, it will be used to compute the hidden unit activations.
 
     `activation_args` : dictionary, optional (default=None)
         Supplies keyword arguments for a callable activation_func
+
+    `user_components`: dictionary, optional (default=None)
+        dictionary containing values for components that woud otherwise be
+        randomly generated.  Valid key/value pairs are as follows:
+           'radii'  : array-like of shape [n_hidden]
+           'centers': array-like of shape [n_hidden, n_features]
+           'biases' : array-like of shape [n_hidden]
+           'weights': array-like of shape [n_hidden, n_features]
+
+    `regressor`    : regressor instance, optional (default=None)
+        If provided, this object is used to perform the regression from hidden
+        unit activations to the outputs and subsequent predictions.  If not
+        present, an ordinary linear least squares fit is performed
 
     `random_state`  : int, RandomState instance or None (default=None)
         Control the pseudo random number generator used to generate the
@@ -367,13 +389,13 @@ class SimpleELMRegressor(BaseEstimator, RegressorMixin):
 
     Attributes
     ----------
-    `elm_regressor_` : ELMRegressor object
+    `genelm_regressor_` : GenELMRegressor object
         Wrapped object that actually performs the fit.
 
     See Also
     --------
-    RBFRandomLayer, SimpleRandomLayer, ELMRegressor, ELMClassifier
-    SimpleELMRegressor, SimpleELMClassifier
+    RandomLayer, RBFRandomLayer, MLPRandomLayer,
+    GenELMRegressor, GenELMClassifier, ELMClassifier
 
     References
     ----------
@@ -383,16 +405,28 @@ class SimpleELMRegressor(BaseEstimator, RegressorMixin):
               2006.
     """
 
-    def __init__(self, n_hidden=20,
+    def __init__(self, n_hidden=20, alpha=0.5, rbf_width=1.0,
                  activation_func='tanh', activation_args=None,
-                 random_state=None):
+                 user_components=None, regressor=None, random_state=None):
 
         self.n_hidden = n_hidden
+        self.alpha = alpha
+        self.random_state = random_state
         self.activation_func = activation_func
         self.activation_args = activation_args
-        self.random_state = random_state
+        self.user_components = user_components
+        self.rbf_width = rbf_width
+        self.regressor = regressor
 
-        self.elm_regressor_ = None
+        self._genelm_regressor_ = None
+
+    def _create_random_layer(self):
+        return RandomLayer(n_hidden=self.n_hidden,
+                           alpha=self.alpha, random_state=self.random_state,
+                           activation_func=self.activation_func,
+                           activation_args=self.activation_args,
+                           user_components=self.user_components,
+                           rbf_width=self.rbf_width)
 
     def fit(self, X, y):
         """
@@ -414,13 +448,10 @@ class SimpleELMRegressor(BaseEstimator, RegressorMixin):
 
             Returns an instance of self.
         """
-        rhl = SimpleRandomLayer(n_hidden=self.n_hidden,
-                                activation_func=self.activation_func,
-                                activation_args=self.activation_args,
-                                random_state=self.random_state)
-
-        self.elm_regressor_ = ELMRegressor(hidden_layer=rhl)
-        self.elm_regressor_.fit(X, y)
+        rhl = self._create_random_layer()
+        self.genelm_regressor_ = GenELMRegressor(hidden_layer=rhl,
+                                                 regressor=self.regressor)
+        self.genelm_regressor_.fit(X, y)
         return self
 
     def predict(self, X):
@@ -436,25 +467,27 @@ class SimpleELMRegressor(BaseEstimator, RegressorMixin):
         C : numpy array of shape [n_samples, n_outputs]
             Predicted values.
         """
-        if (self.elm_regressor_ is None):
+        if (self.genelm_regressor_ is None):
             raise ValueError("SimpleELMRegressor not fitted")
 
-        return self.elm_regressor_.predict(X)
+        return self.genelm_regressor_.predict(X)
 
 
-# ELMClassifier with default SimpleRandomLayer
-class SimpleELMClassifier(BaseEstimator, ClassifierMixin):
+class ELMClassifier(ELMRegressor):
     """
-    SimpleELMClassifier is a classifier based on the Extreme Learning Machine.
+    ELMClassifier is a classifier based on the Extreme Learning Machine.
 
     An Extreme Learning Machine (ELM) is a single layer feedforward
     network with a random hidden layer components and ordinary linear
     least squares fitting of the hidden->output weights by default.
     [1][2]
 
-    SimpleELMClassifier is a wrapper for an ELMClassifier that uses a
-    SimpleRandomLayer and passes the __init__ parameters through
-    to the hidden layer generated by the fit() method.
+    ELMClassifier is an ELMRegressor subclass that first binarizes the
+    data, then uses the superclass to compute the decision function that
+    is then unbinarized to yield the prediction.
+
+    The RandomLayer used for the input transform are exposed in the
+    ELMClassifier constructor.
 
     Parameters
     ----------
@@ -463,7 +496,9 @@ class SimpleELMClassifier(BaseEstimator, ClassifierMixin):
 
     `activation_func` : {callable, string} optional (default='tanh')
         Function used to transform input activation
-        It must be one of 'tanh', 'sine', 'tribas', 'sigmoid', 'hardlim' or
+
+        It must be one of 'tanh', 'sine', 'tribas', 'inv_tribase', 'sigmoid',
+        'hardlim', 'softlim', 'gaussian', 'multiquadric', 'inv_multiquadric' or
         a callable.  If none is given, 'tanh' will be used. If a callable
         is given, it will be used to compute the hidden unit activations.
 
@@ -479,13 +514,10 @@ class SimpleELMClassifier(BaseEstimator, ClassifierMixin):
     `classes_` : numpy array of shape [n_classes]
         Array of class labels
 
-    `elm_classifier_` : ELMClassifier object
-        Wrapped object that actually performs the fit
-
     See Also
     --------
-    RBFRandomLayer, SimpleRandomLayer, ELMRegressor, ELMClassifier
-    SimpleELMRegressor, SimpleELMClassifier
+    RandomLayer, RBFRandomLayer, MLPRandomLayer,
+    GenELMRegressor, GenELMClassifier, ELMClassifier
 
     References
     ----------
@@ -495,20 +527,23 @@ class SimpleELMClassifier(BaseEstimator, ClassifierMixin):
               2006.
     """
 
-    def __init__(self, n_hidden=20,
+    def __init__(self, n_hidden=20, alpha=0.5, rbf_width=1.0,
                  activation_func='tanh', activation_args=None,
+                 user_components=None, regressor=None,
+                 binarizer=LabelBinarizer(-1, 1),
                  random_state=None):
 
-        self.n_hidden = n_hidden
-        self.activation_func = activation_func
-        self.activation_args = activation_args
-        self.random_state = random_state
+        super(ELMClassifier, self).__init__(n_hidden=n_hidden,
+                                            alpha=alpha,
+                                            random_state=random_state,
+                                            activation_func=activation_func,
+                                            activation_args=activation_args,
+                                            user_components=user_components,
+                                            rbf_width=rbf_width,
+                                            regressor=regressor)
 
-        self.elm_classifier_ = None
-
-    @property
-    def classes_(self):
-        return self.elm_classifier_.classes_
+        self.classes_ = None
+        self.binarizer = binarizer
 
     def decision_function(self, X):
         """
@@ -525,7 +560,7 @@ class SimpleELMClassifier(BaseEstimator, ClassifierMixin):
             Decision function values related to each class, per sample.
             In the two-class case, the shape is [n_samples,]
         """
-        return self.elm_classifier_.decision_function(X)
+        return super(ELMClassifier, self).predict(X)
 
     def fit(self, X, y):
         """
@@ -547,13 +582,11 @@ class SimpleELMClassifier(BaseEstimator, ClassifierMixin):
 
             Returns an instance of self.
         """
-        rhl = SimpleRandomLayer(n_hidden=self.n_hidden,
-                                activation_func=self.activation_func,
-                                activation_args=self.activation_args,
-                                random_state=self.random_state)
+        self.classes_ = np.unique(y)
 
-        self.elm_classifier_ = ELMClassifier(hidden_layer=rhl)
-        self.elm_classifier_.fit(X, y)
+        y_bin = self.binarizer.fit_transform(y)
+
+        super(ELMClassifier, self).fit(X, y_bin)
 
         return self
 
@@ -570,7 +603,11 @@ class SimpleELMClassifier(BaseEstimator, ClassifierMixin):
         C : numpy array of shape [n_samples, n_outputs]
             Predicted values.
         """
-        if (self.elm_classifier_ is None):
-            raise ValueError("SimpleELMClassifier not fitted")
+        raw_predictions = self.decision_function(X)
+        class_predictions = self.binarizer.inverse_transform(raw_predictions)
 
-        return self.elm_classifier_.predict(X)
+        return class_predictions
+
+    def score(self, X, y):
+        from sklearn.metrics import accuracy_score
+        return accuracy_score(y, self.predict(X))

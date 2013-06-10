@@ -72,8 +72,8 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.cross_validation import train_test_split
 from sklearn.linear_model import LogisticRegression
 
-from elm import ELMClassifier
-from random_layer import RBFRandomLayer, SimpleRandomLayer
+from elm import GenELMClassifier
+from random_layer import RBFRandomLayer, MLPRandomLayer
 
 
 def get_data_bounds(X):
@@ -136,34 +136,26 @@ def make_classifiers():
 
     # pass user defined transfer func
     sinsq = (lambda x: np.power(np.sin(x), 2.0))
-    srhl_sinsq = SimpleRandomLayer(n_hidden=nh,
-                                   activation_func=sinsq,
-                                   random_state=0)
+    srhl_sinsq = MLPRandomLayer(n_hidden=nh, activation_func=sinsq)
 
     # use internal transfer funcs
-    srhl_tanh = SimpleRandomLayer(n_hidden=nh,
-                                  activation_func='tanh',
-                                  random_state=0)
+    srhl_tanh = MLPRandomLayer(n_hidden=nh, activation_func='tanh')
 
-    srhl_tribas = SimpleRandomLayer(n_hidden=nh,
-                                    activation_func='tribas',
-                                    random_state=0)
+    srhl_tribas = MLPRandomLayer(n_hidden=nh, activation_func='tribas')
 
-    srhl_hardlim = SimpleRandomLayer(n_hidden=nh,
-                                     activation_func='hardlim',
-                                     random_state=0)
+    srhl_hardlim = MLPRandomLayer(n_hidden=nh, activation_func='hardlim')
 
     # use gaussian RBF
-    srhl_rbf = RBFRandomLayer(n_hidden=nh*2, gamma=0.1, random_state=0)
+    srhl_rbf = RBFRandomLayer(n_hidden=nh*2, rbf_width=0.1, random_state=0)
 
     log_reg = LogisticRegression()
 
-    classifiers = [ELMClassifier(srhl_tanh),
-                   ELMClassifier(srhl_tanh, regressor=log_reg),
-                   ELMClassifier(srhl_sinsq),
-                   ELMClassifier(srhl_tribas),
-                   ELMClassifier(srhl_hardlim),
-                   ELMClassifier(srhl_rbf)]
+    classifiers = [GenELMClassifier(hidden_layer=srhl_tanh),
+                   GenELMClassifier(hidden_layer=srhl_tanh, regressor=log_reg),
+                   GenELMClassifier(hidden_layer=srhl_sinsq),
+                   GenELMClassifier(hidden_layer=srhl_tribas),
+                   GenELMClassifier(hidden_layer=srhl_hardlim),
+                   GenELMClassifier(hidden_layer=srhl_rbf)]
 
     return names, classifiers
 
