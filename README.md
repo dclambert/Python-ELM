@@ -91,7 +91,7 @@ A small demo ()based on scikit-learn's plot_classifier_comparison) that shows th
 
 ####__elm_notebook.py__
 
-An IPython notebook, illustrating several ways to use the __\*ELM*__ and __\*RandomLayer__ classes.
+An IPython notebook, illustrating several ways to use the __ELM__ and __RandomLayer__ classes.
 
 Requirements
 ------------
