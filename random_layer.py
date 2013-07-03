@@ -1,4 +1,4 @@
-# -*- coding: utf8
+#-*- coding: utf8
 # Author: David C. Lambert [dcl -at- panix -dot- com]
 # Copyright(c) 2013
 # License: Simple BSD
@@ -35,14 +35,15 @@ __all__ = ['RandomLayer',
            ]
 
 
-# Abstract Base Class for random hidden layers
 class BaseRandomLayer(BaseEstimator, TransformerMixin):
+    """Abstract Base Class for random  layers"""
     __metaclass__ = ABCMeta
 
     _internal_activation_funcs = dict()
 
     @classmethod
     def activation_func_names(cls):
+        """Get list of internal activation function names"""
         return cls._internal_activation_funcs.keys()
 
     # take n_hidden and random_state, init components_ and
@@ -248,7 +249,6 @@ class RandomLayer(BaseRandomLayer):
                                   'sigmoid': _sigmoid,
                                   'softlim': _softlim,
                                   'hardlim': _hardlim,
-                                  'inv_tribas': _inv_tribas,
                                   'gaussian': _gaussian,
                                   'multiquadric': _multiquadric,
                                   'inv_multiquadric': _inv_multiquadric,
@@ -277,13 +277,15 @@ class RandomLayer(BaseRandomLayer):
         self._use_rbf_input = (self.alpha != 1.0)
 
     def _get_user_components(self, key):
+        """Look for given user component"""
         try:
             return self.user_components[key]
         except (TypeError, KeyError):
             return None
 
-    # compute radii
-    def _compute_radii(self, X):
+    def _compute_radii(self):
+        """Generate RBF radii"""
+
         # use supplied radii if present
         radii = self._get_user_components('radii')
 
@@ -297,15 +299,16 @@ class RandomLayer(BaseRandomLayer):
 
         self.components_['radii'] = radii
 
-    # compute centers
     def _compute_centers(self, X, sparse, rs):
+        """Generate RBF centers"""
+
         # use supplied centers if present
         centers = self._get_user_components('centers')
 
         # use points taken uniformly from the bounding
         # hyperrectangle
         if (centers is None):
-            n_samples, n_features = X.shape
+            n_features = X.shape[1]
 
             if (sparse):
                 fxr = xrange(n_features)
@@ -328,7 +331,9 @@ class RandomLayer(BaseRandomLayer):
 
         self.components_['centers'] = centers
 
-    def _compute_biases(self, X, rs):
+    def _compute_biases(self, rs):
+        """Generate MLP biases"""
+
         # use supplied biases if present
         biases = self._get_user_components('biases')
         if (biases is None):
@@ -338,6 +343,8 @@ class RandomLayer(BaseRandomLayer):
         self.components_['biases'] = biases
 
     def _compute_weights(self, X, rs):
+        """Generate MLP weights"""
+
         # use supplied weights if present
         weights = self._get_user_components('weights')
         if (weights is None):
@@ -352,12 +359,12 @@ class RandomLayer(BaseRandomLayer):
 
         rs = check_random_state(self.random_state)
         if (self._use_mlp_input):
-            self._compute_biases(X, rs)
+            self._compute_biases(rs)
             self._compute_weights(X, rs)
 
         if (self._use_rbf_input):
             self._compute_centers(X, sp.issparse(X), rs)
-            self._compute_radii(X)
+            self._compute_radii()
 
     def _compute_input_activations(self, X):
         """Compute input activations given X"""
@@ -377,11 +384,13 @@ class RandomLayer(BaseRandomLayer):
             scale = self.rbf_width * (1.0 - self.alpha)
             rbf_acts = scale * cdist(X, centers)/radii
 
-        #print rbf_acts.shape, mlp_acts.shape, self.alpha
         self.input_activations_ = mlp_acts + rbf_acts
 
 
 class MLPRandomLayer(RandomLayer):
+    """Wrapper for RandomLayer with alpha (mixing coefficient) set
+       to 1.0 for MLP activations only"""
+
     def __init__(self, n_hidden=20, random_state=None,
                  activation_func='tanh', activation_args=None,
                  weights=None, biases=None):
@@ -396,6 +405,9 @@ class MLPRandomLayer(RandomLayer):
 
 
 class RBFRandomLayer(RandomLayer):
+    """Wrapper for RandomLayer with alpha (mixing coefficient) set
+       to 0.0 for RBF activations only"""
+
     def __init__(self, n_hidden=20, random_state=None,
                  activation_func='gaussian', activation_args=None,
                  centers=None, radii=None, rbf_width=1.0):
@@ -467,8 +479,12 @@ class GRBFRandomLayer(RBFRandomLayer):
               neural networks", Neurocomputing 74 (2011), 2502-2510
 
     """
-    def _grbf(acts, taus):
-        return np.exp(np.exp(-pow(acts, taus)))
+    # def _grbf(acts, taus):
+    #     """GRBF activation function"""
+
+    #     return np.exp(np.exp(-pow(acts, taus)))
+
+    _grbf = (lambda acts, taus: np.exp(np.exp(-pow(acts, taus))))
 
     _internal_activation_funcs = {'grbf': _grbf}
 
@@ -488,6 +504,8 @@ class GRBFRandomLayer(RBFRandomLayer):
     # get centers from superclass, then calculate tau_vals
     # according to ref [1]
     def _compute_centers(self, X, sparse, rs):
+        """Generate centers, then compute tau, dF and dN vals"""
+
         super(GRBFRandomLayer, self)._compute_centers(X, sparse, rs)
 
         centers = self.components_['centers']
@@ -506,6 +524,8 @@ class GRBFRandomLayer(RBFRandomLayer):
         self._extra_args['taus'] = self.tau_vals
 
     # get radii according to ref [1]
-    def _compute_radii(self, X):
+    def _compute_radii(self):
+        """Generate radii"""
+
         denom = pow(-np.log(self.grbf_lambda), 1.0/self.tau_vals)
         self.components_['radii'] = self.dF_vals/denom
