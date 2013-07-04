@@ -87,11 +87,11 @@ The ELMRegressor class is a wrapper around GenELMRegressor that uses a RandomLay
 
 ####__plot_elm_comparison.py__
 
-A small demo ()based on scikit-learn's plot_classifier_comparison) that shows the decision functions of a couple of different instantiations of the GenELMClassifier on three different datasets.
+A small demo (based on scikit-learn's plot_classifier_comparison) that shows the decision functions of a couple of different instantiations of the GenELMClassifier on three different datasets.
 
 ####__elm_notebook.py__
 
-An IPython notebook, illustrating several ways to use the __ELM__ and __RandomLayer__ classes.
+An IPython notebook, illustrating several ways to use the __\*ELM\*__ and __\*RandomLayer__ classes.
 
 Requirements
 ------------
