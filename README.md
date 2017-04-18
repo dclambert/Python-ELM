@@ -1,9 +1,9 @@
 Python-ELM v0.3
 ===============
 
-######This is an implementation of the [Extreme Learning Machine](http://www.extreme-learning-machines.org) [1][2] in Python, based on [scikit-learn](http://scikit-learn.org).
+###### This is an implementation of the [Extreme Learning Machine](http://www.extreme-learning-machines.org) [1][2] in Python, based on [scikit-learn](http://scikit-learn.org).
 
-######From the abstract:
+###### From the abstract:
 
 > It is clear that the learning speed of feedforward neural networks is in general far slower than required and it has been a major bottleneck in their applications for past decades. Two key reasons behind may be: 1) the slow gradient- based learning algorithms are extensively used to train neural networks, and 2) all the parameters of the networks are tuned iteratively by using such learning algorithms. Unlike these traditional implementations, this paper proposes a new learning algorithm called extreme learning machine (ELM) for single- hidden layer feedforward neural networks (SLFNs) which ran- domly chooses the input weights and analytically determines the output weights of SLFNs. In theory, this algorithm tends to provide the best generalization performance at extremely fast learning speed. The experimental results based on real- world benchmarking function approximation and classification problems including large complex applications show that the new algorithm can produce best generalization performance in some cases and can learn much faster than traditional popular learning algorithms for feedforward neural networks.
 
@@ -17,7 +17,7 @@ __License: Simple BSD__
 
 Files
 -----
-####__random_layer.py__
+#### __random_layer.py__
 
 Contains the __RandomLayer__, __MLPRandomLayer__, __RBFRandomLayer__ and __GRBFRandomLayer__ classes.
 
@@ -76,7 +76,7 @@ notebook for details.
 
 The GRBFRandomLayer implements the Generalized Radial Basis Function from [[3]](http://sci2s.ugr.es/keel/pdf/keel/articulo/2011-Neurocomputing1.pdf)
 
-####__elm.py__
+#### __elm.py__
 
 Contains the __ELMRegressor__, __ELMClassifier__, __GenELMRegressor__, and __GenELMClassifier__ classes.
 
@@ -85,11 +85,11 @@ GenELMClassifier is little more than a wrapper around GenELMRegressor that binar
 
 The ELMRegressor class is a wrapper around GenELMRegressor that uses a RandomLayer instance by default and exposes the RandomLayer parameters in the constructor.  ELMClassifier is similar for classification.
 
-####__plot_elm_comparison.py__
+#### __plot_elm_comparison.py__
 
 A small demo (based on scikit-learn's plot_classifier_comparison) that shows the decision functions of a couple of different instantiations of the GenELMClassifier on three different datasets.
 
-####__elm_notebook.py__
+#### __elm_notebook.py__
 
 An IPython notebook, illustrating several ways to use the __\*ELM\*__ and __\*RandomLayer__ classes.
 
